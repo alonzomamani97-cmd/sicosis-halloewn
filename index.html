@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - CRUD & Escáner QR</title>
+    <title>Admin - CRUD & Escáner QR (Nube)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- Script de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
@@ -36,14 +38,14 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- CREAR ENTRADA (Create) -->
+            <!-- CREAR ENTRADA -->
             <div class="glass p-6 rounded-xl h-fit">
                 <h3 class="text-xl font-bold text-emerald-400 mb-4 border-b border-slate-700 pb-2">Crear Nueva Entrada</h3>
                 <div class="space-y-3">
                     <input type="text" id="clienteDocumento" placeholder="DNI / Documento (Único)" class="w-full p-2 rounded bg-slate-800 border border-slate-700 neon-border">
                     <input type="text" id="clienteNombre" placeholder="Nombre completo del Cliente" class="w-full p-2 rounded bg-slate-800 border border-slate-700 neon-border">
                     <input type="email" id="clienteEmail" placeholder="Correo Electrónico" class="w-full p-2 rounded bg-slate-800 border border-slate-700 neon-border">
-                    <button onclick="crearEntrada()" class="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold rounded shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all">Generar QR Único</button>
+                    <button id="btnCrear" onclick="crearEntrada()" class="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold rounded shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all">Generar QR Único</button>
                 </div>
             </div>
 
@@ -60,9 +62,12 @@
             </div>
         </div>
 
-        <!-- LEER ENTRADAS (Read / Update / Delete) -->
+        <!-- LEER ENTRADAS -->
         <div class="glass p-6 rounded-xl mt-6">
-            <h3 class="text-xl font-bold text-sky-400 mb-4">Gestión de Entradas (CRUD)</h3>
+            <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                <h3 class="text-xl font-bold text-sky-400">Gestión de Entradas</h3>
+                <button onclick="cargarEntradas()" class="text-sm bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-white">🔄 Actualizar Nube</button>
+            </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[800px]">
                     <thead>
@@ -74,17 +79,17 @@
                             <th class="p-3 text-center">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody id="listaEntradas"></tbody>
+                    <tbody id="listaEntradasUI"></tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <!-- MODAL EDITAR (Update) -->
+    <!-- MODAL EDITAR -->
     <div id="modalEditar" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
         <div class="glass p-6 rounded-xl max-w-sm w-full relative">
             <h3 class="text-xl font-bold text-sky-400 mb-4 border-b border-slate-700 pb-2">Editar Entrada</h3>
-            <input type="hidden" id="editIndex">
+            <input type="hidden" id="editIdDB">
             <div class="space-y-3">
                 <label class="block text-sm text-slate-400">DNI/Documento</label>
                 <input type="text" id="editDoc" class="w-full p-2 rounded bg-slate-800 border border-slate-700 text-white">
@@ -98,7 +103,7 @@
                     <option value="Usado">Usado</option>
                 </select>
                 <div class="flex gap-2 mt-4">
-                    <button onclick="guardarEdicion()" class="flex-1 py-2 bg-sky-500 text-slate-900 font-bold rounded hover:bg-sky-400">Guardar</button>
+                    <button onclick="guardarEdicion()" class="flex-1 py-2 bg-sky-500 text-slate-900 font-bold rounded hover:bg-sky-400">Guardar Nube</button>
                     <button onclick="cerrarModalEditar()" class="flex-1 py-2 bg-slate-600 text-white font-bold rounded hover:bg-slate-500">Cancelar</button>
                 </div>
             </div>
@@ -116,50 +121,34 @@
     </div>
 
     <script>
-        // 1. Crear el "ArrayList" leyendo la memoria del navegador, o iniciarlo vacío
-        let listaEntradas = JSON.parse(localStorage.getItem('entradas_array')) || [];
+        // CONFIGURACIÓN DE SUPABASE (NUBE)
+        const supabaseUrl = 'https://iiqgylssjldgazbavxqs.supabase.co';
+        const supabaseKey = 'sb_publishable_6KBGhNFWQztHVzQGQe_FGg_hivlqU8i';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-        // 2. Función para guardar el ArrayList en la memoria y que sobreviva al F5
-        function guardarDatos() {
-            localStorage.setItem('entradas_array', JSON.stringify(listaEntradas));
-        }
+        let listaEntradas = [];
 
-        // --- LOGIN ---
         function login() {
             if (document.getElementById('user').value === 'yadira' && document.getElementById('pass').value === 'yord123') {
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('adminPanel').classList.remove('hidden');
-                leerEntradas();
+                cargarEntradas(); // Cargar datos de la nube al entrar
             } else {
                 document.getElementById('loginError').classList.remove('hidden');
             }
         }
         function logout() { location.reload(); }
 
-        // --- C: CREATE (Añadir al Array) ---
-        function crearEntrada() {
-            const documento = document.getElementById('clienteDocumento').value.trim();
-            const nombre = document.getElementById('clienteNombre').value.trim();
-            const email = document.getElementById('clienteEmail').value.trim();
-            
-            if (!documento || !nombre || !email) return alert("Completa todos los campos.");
-            if (listaEntradas.some(e => e.documento === documento)) return alert("El DNI ya está registrado.");
-
-            const codigo = `TCK-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-            
-            // Hacer "push" (equivalente a .add() en un ArrayList)
-            listaEntradas.push({ codigo, documento, nombre, email, estado: 'Valido', foto_ingreso: null, fecha_ingreso: null });
-            guardarDatos(); // Guardar cambios para que no se borren
-            
-            document.getElementById('clienteDocumento').value = '';
-            document.getElementById('clienteNombre').value = '';
-            document.getElementById('clienteEmail').value = '';
-            leerEntradas();
+        // --- R: READ (Cargar de la Nube) ---
+        async function cargarEntradas() {
+            const { data, error } = await supabase.from('entradas').select('*').order('id', { ascending: false });
+            if (error) return alert("Error conectando a la base de datos.");
+            listaEntradas = data;
+            renderizarTabla();
         }
 
-        // --- R: READ (Leer el Array) ---
-        function leerEntradas() {
-            const tbody = document.getElementById('listaEntradas');
+        function renderizarTabla() {
+            const tbody = document.getElementById('listaEntradasUI');
             tbody.innerHTML = '';
             listaEntradas.forEach((ent, i) => {
                 const colorEst = ent.estado === 'Valido' ? 'text-emerald-400' : 'text-red-400';
@@ -174,17 +163,48 @@
                         <td class="p-3 text-center flex justify-center gap-2">
                             ${btnFoto}
                             <button onclick="abrirModalEditar(${i})" class="text-xs bg-sky-500/20 text-sky-400 px-2 py-1 rounded border border-sky-500/50 hover:bg-sky-500/40">✏️ Editar</button>
-                            <button onclick="eliminarEntrada(${i})" class="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded border border-red-500/50 hover:bg-red-500/40">🗑️ Borrar</button>
+                            <button onclick="eliminarEntrada(${ent.id}, '${ent.nombre}')" class="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded border border-red-500/50 hover:bg-red-500/40">🗑️ Borrar</button>
                         </td>
                     </tr>
                 `;
             });
         }
 
-        // --- U: UPDATE (Editar Array) ---
+        // --- C: CREATE (Subir a la Nube) ---
+        async function crearEntrada() {
+            const documento = document.getElementById('clienteDocumento').value.trim();
+            const nombre = document.getElementById('clienteNombre').value.trim();
+            const email = document.getElementById('clienteEmail').value.trim();
+            
+            if (!documento || !nombre || !email) return alert("Completa todos los campos.");
+            
+            // Verificar si existe en la base de datos
+            const { data: existe } = await supabase.from('entradas').select('id').eq('documento', documento);
+            if (existe.length > 0) return alert("El DNI ya está registrado en la nube.");
+
+            const codigo = `TCK-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+            
+            const btn = document.getElementById('btnCrear');
+            btn.textContent = "Guardando..."; btn.disabled = true;
+
+            const { error } = await supabase.from('entradas').insert([
+                { codigo, documento, nombre, email, estado: 'Valido', foto_ingreso: null, fecha_ingreso: null }
+            ]);
+
+            btn.textContent = "Generar QR Único"; btn.disabled = false;
+
+            if (error) return alert("Error al guardar en la nube.");
+            
+            document.getElementById('clienteDocumento').value = '';
+            document.getElementById('clienteNombre').value = '';
+            document.getElementById('clienteEmail').value = '';
+            cargarEntradas(); // Refrescar vista
+        }
+
+        // --- U: UPDATE (Editar en la Nube) ---
         function abrirModalEditar(index) {
             const ent = listaEntradas[index];
-            document.getElementById('editIndex').value = index;
+            document.getElementById('editIdDB').value = ent.id;
             document.getElementById('editDoc').value = ent.documento;
             document.getElementById('editNombre').value = ent.nombre;
             document.getElementById('editEmail').value = ent.email;
@@ -192,30 +212,32 @@
             document.getElementById('modalEditar').classList.remove('hidden');
         }
 
-        function guardarEdicion() {
-            const index = document.getElementById('editIndex').value;
-            listaEntradas[index].documento = document.getElementById('editDoc').value;
-            listaEntradas[index].nombre = document.getElementById('editNombre').value;
-            listaEntradas[index].email = document.getElementById('editEmail').value;
-            listaEntradas[index].estado = document.getElementById('editEstado').value;
+        async function guardarEdicion() {
+            const id = document.getElementById('editIdDB').value;
+            const documento = document.getElementById('editDoc').value;
+            const nombre = document.getElementById('editNombre').value;
+            const email = document.getElementById('editEmail').value;
+            const estado = document.getElementById('editEstado').value;
             
-            if (listaEntradas[index].estado === 'Valido') {
-                listaEntradas[index].foto_ingreso = null;
-                listaEntradas[index].fecha_ingreso = null;
+            const datos = { documento, nombre, email, estado };
+            if (estado === 'Valido') {
+                datos.foto_ingreso = null;
+                datos.fecha_ingreso = null;
             }
 
-            guardarDatos();
+            const { error } = await supabase.from('entradas').update(datos).eq('id', id);
+            
+            if (error) alert("Error actualizando en la nube.");
             cerrarModalEditar();
-            leerEntradas();
+            cargarEntradas();
         }
         function cerrarModalEditar() { document.getElementById('modalEditar').classList.add('hidden'); }
 
-        // --- D: DELETE (Remover del Array) ---
-        function eliminarEntrada(index) {
-            if(confirm(`¿Borrar entrada de ${listaEntradas[index].nombre}?`)) {
-                listaEntradas.splice(index, 1); // Equivalente a .remove(index)
-                guardarDatos();
-                leerEntradas();
+        // --- D: DELETE (Borrar de la Nube) ---
+        async function eliminarEntrada(id, nombre) {
+            if(confirm(`¿Borrar entrada de ${nombre} permanentemente de la nube?`)) {
+                await supabase.from('entradas').delete().eq('id', id);
+                cargarEntradas();
             }
         }
 
@@ -236,7 +258,7 @@
             scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess, () => {});
         }
 
-        function onScanSuccess(codigoEscaneado) {
+        async function onScanSuccess(codigoEscaneado) {
             const foto = capturarFotograma();
             scanner.pause(true);
             
@@ -248,22 +270,28 @@
             rImg.classList.add('hidden');
             rImg.src = foto || '';
 
+            // Buscar directo en la memoria local sincronizada
             const index = listaEntradas.findIndex(e => e.codigo === codigoEscaneado);
             
             if (index === -1) {
                 rDiv.classList.add('bg-red-900/50');
-                rMsg.innerHTML = `<span class="text-red-400">❌ QR INVÁLIDO</span>`;
+                rMsg.innerHTML = `<span class="text-red-400">❌ QR INVÁLIDO O NO ENCONTRADO</span>`;
             } else {
                 const ent = listaEntradas[index];
                 if (ent.estado === 'Usado') {
                     rDiv.classList.add('bg-yellow-900/50');
                     rMsg.innerHTML = `<span class="text-yellow-400">⚠️ YA ESCANEADO</span><br><span class="text-sm text-white">${ent.nombre}</span>`;
                 } else {
-                    listaEntradas[index].estado = 'Usado';
-                    listaEntradas[index].foto_ingreso = foto;
-                    listaEntradas[index].fecha_ingreso = new Date().toLocaleString();
-                    guardarDatos(); 
-                    leerEntradas();
+                    const fechaActual = new Date().toLocaleString();
+                    
+                    // Actualizar en la base de datos de la nube
+                    await supabase.from('entradas').update({ 
+                        estado: 'Usado', 
+                        foto_ingreso: foto, 
+                        fecha_ingreso: fechaActual 
+                    }).eq('id', ent.id);
+
+                    cargarEntradas(); // Refrescar vista local
 
                     rDiv.classList.add('bg-emerald-900/50');
                     rMsg.innerHTML = `<span class="text-emerald-400">✅ INGRESO VÁLIDO</span><br><span class="text-sm text-white">${ent.nombre}</span>`;
