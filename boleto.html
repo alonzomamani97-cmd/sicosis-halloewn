@@ -47,10 +47,10 @@
     </div>
 
     <script>
-        // CONFIGURACIÓN DE SUPABASE (NUBE)
+        // CONFIGURACIÓN DE SUPABASE (NUBE) - Variable cambiada a 'db'
         const supabaseUrl = 'https://iiqgylssjldgazbavxqs.supabase.co';
         const supabaseKey = 'sb_publishable_6KBGhNFWQztHVzQGQe_FGg_hivlqU8i';
-        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        const db = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         async function buscarEntrada() {
             const query = document.getElementById('datoBusqueda').value.trim();
@@ -59,8 +59,8 @@
             const btn = document.getElementById('btnBuscar');
             btn.textContent = "Buscando en la nube..."; btn.disabled = true;
 
-            // Consultar a Supabase por DNI o Email
-            const { data, error } = await supabase
+            // Consultar a Supabase usando 'db'
+            const { data, error } = await db
                 .from('entradas')
                 .select('*')
                 .or(`documento.eq.${query},email.eq.${query}`)
