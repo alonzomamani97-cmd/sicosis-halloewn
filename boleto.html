@@ -6,6 +6,8 @@
     <title>Portal Cliente - Mi Entrada QR</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Script de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
@@ -24,7 +26,7 @@
         <!-- SECCIÓN DE BÚSQUEDA -->
         <div id="searchSection" class="space-y-4">
             <input type="text" id="datoBusqueda" class="w-full p-3 rounded bg-slate-800 border border-slate-700 neon-border text-center text-white" placeholder="Ej: 71234567 o correo@gmail.com">
-            <button onclick="buscarEntrada()" class="w-full py-3 bg-sky-500 hover:bg-sky-400 text-slate-900 font-bold rounded shadow-[0_0_15px_rgba(56,189,248,0.5)] transition-all">Mostrar mi QR</button>
+            <button id="btnBuscar" onclick="buscarEntrada()" class="w-full py-3 bg-sky-500 hover:bg-sky-400 text-slate-900 font-bold rounded shadow-[0_0_15px_rgba(56,189,248,0.5)] transition-all">Mostrar mi QR</button>
             <p id="errorMsg" class="text-red-400 text-sm hidden bg-red-900/30 p-2 rounded border border-red-500/30">No se encontró una entrada registrada con esos datos.</p>
         </div>
 
@@ -35,7 +37,6 @@
                 <p class="text-slate-300">DNI: <span id="lblDocumento" class="font-bold text-sky-400"></span></p>
             </div>
             
-            <!-- Contenedor donde se dibuja el QR -->
             <div id="qrDisplay" class="flex justify-center mb-4"></div>
             
             <p class="text-slate-400 font-mono text-xs mb-2">CÓDIGO ÚNICO: <br><span id="lblCodigo" class="text-sky-300 text-sm"></span></p>
@@ -46,28 +47,37 @@
     </div>
 
     <script>
-        function buscarEntrada() {
-            const query = document.getElementById('datoBusqueda').value.trim().toLowerCase();
+        // CONFIGURACIÓN DE SUPABASE (NUBE)
+        const supabaseUrl = 'https://iiqgylssjldgazbavxqs.supabase.co';
+        const supabaseKey = 'sb_publishable_6KBGhNFWQztHVzQGQe_FGg_hivlqU8i';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        async function buscarEntrada() {
+            const query = document.getElementById('datoBusqueda').value.trim();
             if (!query) return;
 
-            // 1. Leer el mismo ArrayList que el administrador guarda en la memoria
-            const listaEntradas = JSON.parse(localStorage.getItem('entradas_array')) || [];
-            
-            // 2. Buscar si coincide el DNI o el Correo
-            const entrada = listaEntradas.find(e => e.email.toLowerCase() === query || e.documento.toLowerCase() === query);
+            const btn = document.getElementById('btnBuscar');
+            btn.textContent = "Buscando en la nube..."; btn.disabled = true;
 
-            if (entrada) {
-                // Ocultar búsqueda y mostrar boleto
+            // Consultar a Supabase por DNI o Email
+            const { data, error } = await supabase
+                .from('entradas')
+                .select('*')
+                .or(`documento.eq.${query},email.eq.${query}`)
+                .limit(1);
+
+            btn.textContent = "Mostrar mi QR"; btn.disabled = false;
+
+            if (data && data.length > 0) {
+                const entrada = data[0];
                 document.getElementById('errorMsg').classList.add('hidden');
                 document.getElementById('searchSection').classList.add('hidden');
                 document.getElementById('ticketSection').classList.remove('hidden');
 
-                // Llenar los datos del cliente
                 document.getElementById('lblNombre').textContent = entrada.nombre;
                 document.getElementById('lblDocumento').textContent = entrada.documento;
                 document.getElementById('lblCodigo').textContent = entrada.codigo;
                 
-                // Mostrar estado con colores
                 const estadoEl = document.getElementById('lblEstado');
                 if(entrada.estado === 'Valido') {
                     estadoEl.textContent = '🟢 VÁLIDO PARA INGRESO';
@@ -77,18 +87,12 @@
                     estadoEl.className = 'font-bold text-lg mb-4 py-2 rounded bg-red-900/40 text-red-400 border border-red-500/30';
                 }
 
-                // Generar el código QR visualmente
                 document.getElementById('qrDisplay').innerHTML = ''; 
                 new QRCode(document.getElementById("qrDisplay"), {
-                    text: entrada.codigo,
-                    width: 220,
-                    height: 220,
-                    colorDark : "#0f172a",
-                    colorLight : "#ffffff",
-                    correctLevel : QRCode.CorrectLevel.H
+                    text: entrada.codigo, width: 220, height: 220,
+                    colorDark : "#0f172a", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H
                 });
             } else {
-                // Mostrar error si no existe
                 document.getElementById('errorMsg').classList.remove('hidden');
             }
         }
