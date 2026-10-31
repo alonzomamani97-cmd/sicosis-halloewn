@@ -121,10 +121,10 @@
     </div>
 
     <script>
-        // CONFIGURACIÓN DE SUPABASE (NUBE)
+        // CONFIGURACIÓN DE SUPABASE (NUBE) - Variable cambiada a 'db'
         const supabaseUrl = 'https://iiqgylssjldgazbavxqs.supabase.co';
         const supabaseKey = 'sb_publishable_6KBGhNFWQztHVzQGQe_FGg_hivlqU8i';
-        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        const db = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         let listaEntradas = [];
 
@@ -132,16 +132,15 @@
             if (document.getElementById('user').value === 'yadira' && document.getElementById('pass').value === 'yord123') {
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('adminPanel').classList.remove('hidden');
-                cargarEntradas(); // Cargar datos de la nube al entrar
+                cargarEntradas();
             } else {
                 document.getElementById('loginError').classList.remove('hidden');
             }
         }
         function logout() { location.reload(); }
 
-        // --- R: READ (Cargar de la Nube) ---
         async function cargarEntradas() {
-            const { data, error } = await supabase.from('entradas').select('*').order('id', { ascending: false });
+            const { data, error } = await db.from('entradas').select('*').order('id', { ascending: false });
             if (error) return alert("Error conectando a la base de datos.");
             listaEntradas = data;
             renderizarTabla();
@@ -170,7 +169,6 @@
             });
         }
 
-        // --- C: CREATE (Subir a la Nube) ---
         async function crearEntrada() {
             const documento = document.getElementById('clienteDocumento').value.trim();
             const nombre = document.getElementById('clienteNombre').value.trim();
@@ -178,8 +176,7 @@
             
             if (!documento || !nombre || !email) return alert("Completa todos los campos.");
             
-            // Verificar si existe en la base de datos
-            const { data: existe } = await supabase.from('entradas').select('id').eq('documento', documento);
+            const { data: existe } = await db.from('entradas').select('id').eq('documento', documento);
             if (existe.length > 0) return alert("El DNI ya está registrado en la nube.");
 
             const codigo = `TCK-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
@@ -187,7 +184,7 @@
             const btn = document.getElementById('btnCrear');
             btn.textContent = "Guardando..."; btn.disabled = true;
 
-            const { error } = await supabase.from('entradas').insert([
+            const { error } = await db.from('entradas').insert([
                 { codigo, documento, nombre, email, estado: 'Valido', foto_ingreso: null, fecha_ingreso: null }
             ]);
 
@@ -198,10 +195,9 @@
             document.getElementById('clienteDocumento').value = '';
             document.getElementById('clienteNombre').value = '';
             document.getElementById('clienteEmail').value = '';
-            cargarEntradas(); // Refrescar vista
+            cargarEntradas(); 
         }
 
-        // --- U: UPDATE (Editar en la Nube) ---
         function abrirModalEditar(index) {
             const ent = listaEntradas[index];
             document.getElementById('editIdDB').value = ent.id;
@@ -225,7 +221,7 @@
                 datos.fecha_ingreso = null;
             }
 
-            const { error } = await supabase.from('entradas').update(datos).eq('id', id);
+            const { error } = await db.from('entradas').update(datos).eq('id', id);
             
             if (error) alert("Error actualizando en la nube.");
             cerrarModalEditar();
@@ -233,15 +229,13 @@
         }
         function cerrarModalEditar() { document.getElementById('modalEditar').classList.add('hidden'); }
 
-        // --- D: DELETE (Borrar de la Nube) ---
         async function eliminarEntrada(id, nombre) {
             if(confirm(`¿Borrar entrada de ${nombre} permanentemente de la nube?`)) {
-                await supabase.from('entradas').delete().eq('id', id);
+                await db.from('entradas').delete().eq('id', id);
                 cargarEntradas();
             }
         }
 
-        // --- CÁMARA Y ESCÁNER ---
         function capturarFotograma() {
             const video = document.querySelector('#reader video');
             if (!video) return null;
@@ -270,7 +264,6 @@
             rImg.classList.add('hidden');
             rImg.src = foto || '';
 
-            // Buscar directo en la memoria local sincronizada
             const index = listaEntradas.findIndex(e => e.codigo === codigoEscaneado);
             
             if (index === -1) {
@@ -284,14 +277,13 @@
                 } else {
                     const fechaActual = new Date().toLocaleString();
                     
-                    // Actualizar en la base de datos de la nube
-                    await supabase.from('entradas').update({ 
+                    await db.from('entradas').update({ 
                         estado: 'Usado', 
                         foto_ingreso: foto, 
                         fecha_ingreso: fechaActual 
                     }).eq('id', ent.id);
 
-                    cargarEntradas(); // Refrescar vista local
+                    cargarEntradas();
 
                     rDiv.classList.add('bg-emerald-900/50');
                     rMsg.innerHTML = `<span class="text-emerald-400">✅ INGRESO VÁLIDO</span><br><span class="text-sm text-white">${ent.nombre}</span>`;
